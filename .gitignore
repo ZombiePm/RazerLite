@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+.env
+.env.*
+*.log
+*.pem
+*.key
+dist/
+backup*/
+state.json
+color.json
+game.json
+installation.json
+last-backup.txt
+button-original*.json

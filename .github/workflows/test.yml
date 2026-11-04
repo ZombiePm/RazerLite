@@ -1,0 +1,30 @@
+name: Tests
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  unit-tests:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ['3.10', '3.14']
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m unittest test_color_cycle test_mouse_binding
+      - run: python -m compileall -q hardware.py service.py session.py color_worker.py color_cycle.py mouse_binding.py restore_button.py
+      - name: Windows hook policy tests (no injected input)
+        if: runner.os == 'Windows'
+        run: python test_session.py
+      - name: Parse PowerShell scripts
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          Get-ChildItem *.ps1 | ForEach-Object {
+            $tokens=$null; $errors=$null
+            [System.Management.Automation.Language.Parser]::ParseFile($_.FullName,[ref]$tokens,[ref]$errors) | Out-Null
+            if ($errors.Count) { throw ($errors | Out-String) }
+          }

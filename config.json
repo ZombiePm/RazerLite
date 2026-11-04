@@ -1,0 +1,1 @@
+{"color": [0, 255, 0], "brightness": 100, "dpi": 26000, "mode": "fullscreen", "games": [], "exclude": ["explorer.exe", "chrome.exe", "msedge.exe", "firefox.exe", "vlc.exe", "mpv.exe", "mstsc.exe", "windowsterminal.exe"], "color_button": true}
