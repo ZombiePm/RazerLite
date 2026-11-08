@@ -18,7 +18,7 @@ A small background controller for **Razer Basilisk V3** and **Razer Cynosa Lite*
 | Device | USB ID | Support |
 |---|---|---|
 | Razer Basilisk V3 (wired, original 26K model) | `1532:0099` | Lighting, DPI enforcement, color button |
-| Razer Cynosa Lite | `1532:023f` | Lighting, game-mode indicator |
+| Razer Cynosa Lite | `1532:023f` | Lighting |
 
 These two devices were tested together on Windows. Other models, including Basilisk V3 Pro/35K, are **not supported by this release**. The vendored library contains more device definitions; RazerLite intentionally controls only the two IDs above.
 
@@ -26,7 +26,7 @@ These two devices were tested together on Windows. Other models, including Basil
 
 Requirements: Windows 10/11 x64, **64-bit Python 3.10+ installed for all users**, and administrator access. Hardware testing used Python 3.14; CI also checks 3.10. Python must be accessible to the Windows service account; a per-user Microsoft Store installation is not suitable.
 
-1. Download and extract `RazerLite-0.1.0-windows-source.zip` from [Releases](https://github.com/ZombiePm/RazerLite/releases).
+1. Download and extract `RazerLite-0.1.1-windows-source.zip` from [Releases](https://github.com/ZombiePm/RazerLite/releases).
 2. Open PowerShell **as Administrator**, using your usual desktop account, and change to the extracted directory.
 3. Check prerequisites, then install. Adjust the Python path to your installation:
 
@@ -73,6 +73,10 @@ Connect the mouse and run from an elevated PowerShell window under the same acco
 
 This restores saved button assignments and Razer startup settings, then removes the RazerLite service/task. Sign out and back in to reopen Razer's user interface. Application files, logs and backups are retained for inspection; they can be removed manually afterward.
 
+## Focus changes and keyboard input
+
+Windows-key blocking is software-only. Keyboard firmware game mode is not switched when entering, leaving or minimizing a game. A legacy hardware game lock is cleared once when the keyboard is discovered. Each Windows/F24 press keeps its original forwarding decision through repeats and release; ordinary game keys and modifiers always pass through, with no synthesized input.
+
 ## Performance and validation
 
 Color input wakes a dedicated worker immediately; the service checks the selected RGB every 20 ms. Device discovery runs every 3 seconds and DPI/profile checks every second. Animation uses volatile device settings; the selected RGB is persisted locally. Temporary state-file write failures are retried without discarding the selection.
@@ -80,7 +84,7 @@ Color input wakes a dedicated worker immediately; the service checks the selecte
 On the tested Windows machine, a synthetic callback-to-live-HID benchmark delivered 55 frames per device: **22.0 ms / 24.3 ms median**, **38.1 ms / 40.1 ms maximum** for mouse/keyboard. This measures software processing and device acknowledgements, **not physical switch-to-light latency**. The user confirmed the improved behavior. Approximately 50 MB combined working set was measured while idle; results vary by machine.
 
 ```powershell
-python -m unittest test_color_cycle test_mouse_binding
+python -m unittest test_color_cycle test_mouse_binding test_key_filter test_keyboard_mode
 ```
 
 `test_session.py` runs Windows hook-policy tests without injecting desktop input. Run it in a separate session from the active helper. `benchmark_color.py` needs the service running and the helper task stopped; it temporarily changes lighting and restores the previous color. `verify.py` needs the service stopped to avoid concurrent HID requests.

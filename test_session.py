@@ -7,7 +7,7 @@ s.gaming=True;s.last_update=time.monotonic()
 assert s.callback(0,0x100,address)==1
 s.gaming=False
 assert s.callback(0,0x101,address)==1
-assert not s.blocked
+assert not s.key_filter.presses
 s.gaming=True;s.last_update=time.monotonic()-10
 assert s.callback(0,0x100,address)!=1
 print('PASS: Windows key down/up pairing; stale detector fails open')

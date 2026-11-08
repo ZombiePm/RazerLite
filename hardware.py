@@ -25,6 +25,7 @@ def run():
     logging.basicConfig(level=logging.INFO, handlers=[handler], format='%(asctime)s %(levelname)s %(message)s')
     manager = DeviceManager(bluetooth=False, persistence=Persistence(str(DATA/'state.json')))
     applied={};bound={};retry={};devices=[];selection=None
+    keyboards_ready=set()
     scan_at=config_at=maintenance_at=0.;cfg=None
     try:
         while not STOP.is_set():
@@ -34,6 +35,7 @@ def run():
                     cfg=json.loads((ROOT/'config.json').read_text());config_at=now+1
                 if now>=scan_at:
                     devices=manager.scan();scan_at=now+3
+                    keyboards_ready.intersection_update(devices)
                     applied={d:v for d,v in applied.items() if d in devices}
                     bound={d:v for d,v in bound.items() if d in devices}
                     retry={d:v for d,v in retry.items() if d in devices}
@@ -45,6 +47,12 @@ def run():
                 for d in devices:
                     if d.pid not in (0x99,0x23f) or now<retry.get(d,0):continue
                     try:
+                        if d.pid==0x23f and d not in keyboards_ready:
+                            # Never switch keyboard firmware mode on focus/Alt+Tab.
+                            # Clear the old hardware game lock only once on discovery.
+                            if d.get_game_mode():d.set_game_mode(False)
+                            keyboards_ready.add(d)
+                            logging.info('Keyboard ready; Windows-key filtering is software-only')
                         signature=(tuple(rgb),cfg['brightness'])
                         previous=applied.get(d)
                         if previous is None or previous[0]!=signature or now-previous[1]>60:
@@ -72,12 +80,6 @@ def run():
                                 d.set_dpi(target)
                                 if d.get_dpi()!=(target,target):raise RuntimeError('DPI readback mismatch')
                                 logging.info('DPI restored to %s',target)
-                        else:
-                            try:
-                                state=json.loads((DATA/'session'/'game.json').read_text())
-                                gaming=bool(state['gaming']) and 0<=time.time()-state['time']<5
-                            except (OSError,ValueError,KeyError):gaming=False
-                            if d.get_game_mode()!=gaming:d.set_game_mode(gaming)
                     except Exception:
                         logging.exception('Device operation failed: %s',d.name)
                         applied.pop(d,None);retry[d]=time.monotonic()+1
@@ -85,13 +87,9 @@ def run():
                 STOP.wait(.02)
             except Exception:
                 logging.exception('Hardware loop failed')
-                manager.close();applied.clear();bound.clear();devices=[];scan_at=0
+                manager.close();applied.clear();bound.clear();keyboards_ready.clear();devices=[];scan_at=0
                 STOP.wait(1)
     finally:
-        for d in manager.devices:
-            if d.pid==0x23f:
-                try:d.set_game_mode(False)
-                except Exception:pass
         manager.close()
 
 if __name__=='__main__':run()

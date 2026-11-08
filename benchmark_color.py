@@ -5,7 +5,7 @@ import ctypes as c,json,pathlib,threading,time,re,statistics
 import session as s
 from color_cycle import load_selection,save_selection
 import color_worker
-path=s.STATE.parent/'color.json';original=load_selection(path)
+path=s.SESSION_DIR/'color.json';original=load_selection(path)
 log=path.parent.parent/'hardware.log';offset=log.stat().st_size
 stop=threading.Event();worker=threading.Thread(target=color_worker.run,args=(s.color_presses,path,stop));worker.start()
 key=s.Key();key.vk=0x87;s.color_enabled=True

@@ -1,11 +1,11 @@
 """Foreground detection + Windows-key-only hook, no injection into games."""
 import ctypes as c
 from ctypes import wintypes as w
-import json, pathlib, threading, time, os, queue, logging, logging.handlers
-from color_cycle import PressLatch
+import json, pathlib, threading, time, queue, logging, logging.handlers
+from key_filter import KeyFilter
 import color_worker
 ROOT=pathlib.Path(__file__).resolve().parent
-STATE=pathlib.Path('C:/ProgramData/RazerLite/session/game.json')
+SESSION_DIR=pathlib.Path('C:/ProgramData/RazerLite/session')
 u=c.WinDLL('user32',use_last_error=True); k=c.WinDLL('kernel32',use_last_error=True)
 LRESULT=c.c_ssize_t
 HOOK=c.WINFUNCTYPE(LRESULT,c.c_int,w.WPARAM,w.LPARAM)
@@ -29,7 +29,7 @@ if not mutex or c.get_last_error()==183: raise SystemExit(0)
 gaming=False;last_update=0.0
 color_enabled=False
 color_presses=queue.SimpleQueue()
-color_latch=PressLatch()
+key_filter=KeyFilter()
 
 def foreground(cfg):
     hwnd=u.GetForegroundWindow()
@@ -53,48 +53,34 @@ def foreground(cfg):
 
 def watch():
     global gaming,last_update,color_enabled
-    STATE.parent.mkdir(parents=True,exist_ok=True)
     while True:
         try:
             cfg=json.loads((ROOT/'config.json').read_text())
             gaming=foreground(cfg);last_update=time.monotonic()
             color_enabled=bool(cfg.get('color_button',False))
-            tmp=STATE.with_suffix('.tmp')
-            tmp.write_text(json.dumps({'gaming':gaming,'time':time.time()}))
-            os.replace(tmp,STATE)
         except Exception:
             gaming=False
             logging.exception('Foreground monitor failed')
         time.sleep(.25)
 
 class Key(c.Structure): _fields_=[('vk',w.DWORD),('scan',w.DWORD),('flags',w.DWORD),('time',w.DWORD),('extra',c.c_size_t)]
-blocked=set()
 @HOOK
 def callback(code,msg,data):
     if code>=0:
-        key=c.cast(data,c.POINTER(Key)).contents.vk
-        if key==0x87 and color_enabled and not (c.cast(data,c.POINTER(Key)).contents.flags & 0x10):
-            if msg in (0x100,0x104):
-                if color_latch.feed(True):color_presses.put((True,time.time_ns()))
-                return 1
-            if msg in (0x101,0x105):
-                if color_latch.held:
-                    color_latch.feed(False)
-                    color_presses.put((False,time.time_ns()))
-                return 1
-        if key in (0x5b,0x5c):
-            if msg in (0x100,0x104) and gaming and time.monotonic()-last_update<2:
-                blocked.add(key);return 1
-            if key in blocked:
-                if msg in (0x101,0x105):blocked.discard(key)
-                return 1
+        event=c.cast(data,c.POINTER(Key)).contents
+        suppress,color_event=key_filter.handle(
+            event.vk,msg,gaming and time.monotonic()-last_update<2,
+            color_enabled,bool(event.flags & 0x10))
+        if color_event is not None:
+            color_presses.put((color_event,time.time_ns()))
+        if suppress:return 1
     return u.CallNextHookEx(None,code,msg,data)
 
 if __name__=='__main__':
-    STATE.parent.mkdir(parents=True,exist_ok=True)
-    logging.basicConfig(level=logging.INFO,handlers=[logging.handlers.RotatingFileHandler(STATE.parent/'session.log',maxBytes=262144,backupCount=2)])
+    SESSION_DIR.mkdir(parents=True,exist_ok=True)
+    logging.basicConfig(level=logging.INFO,handlers=[logging.handlers.RotatingFileHandler(SESSION_DIR/'session.log',maxBytes=262144,backupCount=2)])
     color_stop=threading.Event()
-    threading.Thread(target=color_worker.run,args=(color_presses,STATE.parent/'color.json',color_stop),daemon=True).start()
+    threading.Thread(target=color_worker.run,args=(color_presses,SESSION_DIR/'color.json',color_stop),daemon=True).start()
     hook=u.SetWindowsHookExW(13,callback,k.GetModuleHandleW(None),0)
     if not hook:raise c.WinError(c.get_last_error())
     threading.Thread(target=watch,daemon=True).start()
@@ -105,4 +91,3 @@ if __name__=='__main__':
     finally:
         color_stop.set()
         u.UnhookWindowsHookEx(hook)
-        STATE.write_text(json.dumps({'gaming':False,'time':time.time()}))

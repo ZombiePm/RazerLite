@@ -15,7 +15,7 @@ $pythonw=Join-Path (Split-Path $PythonPath) 'pythonw.exe'
 if (!(Test-Path -LiteralPath $pythonw -PathType Leaf)) { throw 'pythonw.exe is required beside python.exe.' }
 & $PythonPath -c "import sys,struct;sys.exit(0 if sys.version_info >= (3,10) and struct.calcsize('P') == 8 else 1)"
 if ($LASTEXITCODE -ne 0) { throw '64-bit Python 3.10 or newer is required.' }
-$files=@('hardware.py','service.py','session.py','color_cycle.py','color_worker.py','mouse_binding.py','restore_button.py','config.json','install.ps1','restore.ps1','LICENSE','THIRD_PARTY.md','README.md','README.ru.md','CHANGELOG.md','VERSION')
+$files=@('hardware.py','service.py','session.py','color_cycle.py','color_worker.py','mouse_binding.py','key_filter.py','restore_button.py','config.json','install.ps1','restore.ps1','LICENSE','THIRD_PARTY.md','README.md','README.ru.md','CHANGELOG.md','VERSION')
 foreach($file in $files) { if (!(Test-Path -LiteralPath (Join-Path $PSScriptRoot $file))) { throw "Missing release file: $file" } }
 if (!(Test-Path -LiteralPath (Join-Path $PSScriptRoot 'vendor\openrazer_win'))) { throw 'Missing vendor directory.' }
 if ($CheckOnly) { Write-Output 'Preflight passed; no services, tasks or files changed.'; return }
